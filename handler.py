@@ -18,7 +18,8 @@ async def handle_msg(m, cb):
         room = 'global'
 
     for rawmessage in messages:
-        print(f'{room}{rawmessage}')
+        if cb.logall:
+            print(f'{room}{rawmessage}')
         rawmessage = f'{">" + room}\n{rawmessage}'
 
         msg = rawmessage.split("|")
@@ -71,7 +72,8 @@ async def handle_msg(m, cb):
             cb.rooms[room].users = []
             for user in msg[2].split(',')[1:]:
                 cb.rooms[room].users.append(user)
-            print(cb.rooms[room].__dict__)
+            if cb.logall:
+                print(cb.rooms[room].__dict__)
 
         elif downmsg == ':':
             cb.rooms[room].join_time = int(msg[2])

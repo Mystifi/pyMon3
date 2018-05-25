@@ -7,6 +7,7 @@ import time
 import aiohttp
 
 import handler
+import utils
 
 
 class Chatbot:
@@ -16,7 +17,9 @@ class Chatbot:
         print(f"({self.id}) Instance created")
         self.username = self.config[self.id]['username']
         self.server = self.config['DEFAULT']['server']
+        self.redis_url = self.config['DEFAULT']['redis_url']
         self.master = self.config[self.id]['master']
+        self.logall = self.config[self.id].getboolean('logall')
         self.queue = asyncio.Queue(loop=self.loop)
         self.teams = json.loads(self.config[self.id].get('teams'))
         self.rooms = {}
@@ -52,6 +55,8 @@ class Chatbot:
                 self.plugins.append(plugin)
             else:
                 self.plugins += plugin
+        if self.logall:
+            print(f"Reloaded {len(self.plugins)} plugins: {', '.join(map(lambda p: p.__class__.__name__, self.plugins))}")
 
     async def _init_plugins(self):
         self.plugins = []
@@ -64,6 +69,8 @@ class Chatbot:
                 self.plugins.append(plugin)
             else:
                 self.plugins += plugin
+        if self.logall:
+            print(f"Loaded {len(self.plugins)} plugins: {', '.join(map(lambda p: p.__class__.__name__, self.plugins))}")
 
     async def get_message(self):
         async for msg in self.ws:
@@ -82,3 +89,6 @@ class Chatbot:
 
     async def send_pm(self, user, msg):
         await self.send('', f'/pm {user},{msg}')
+
+    async def getdatabase(self, db_name):
+        return await utils.getdatabase(db_name, self)

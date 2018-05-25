@@ -1,8 +1,10 @@
 import json
 import re
+import os
 import time
 
 import aiohttp
+import aioredis
 
 
 def condense(string):
@@ -109,29 +111,54 @@ async def haste(message):
     return result
 
 
-def execute_sql(sql, cb):
-    cb.c.execute(sql)
-    result = cb.c.fetchall()
-    return ppsql(cb.c, result)
+# Holds the loaded databases (so we don't create another
+# instance of the same database).
+_databases = {}
 
 
-def ppsql(cursor, rows):
-    widths = []
-    columns = []
-    tavnit = '|'
-    separator = '+'
-    res = ''
-    for i, cd in enumerate(cursor.description):
-        max_l = max([len(x[i]) for x in rows])
-        widths.append(max(max_l, len(cd[0])))
-        columns.append(cd[0])
-    for w in widths:
-        tavnit += " %-"+"%ss |" % (w,)
-        separator += '-'*w + '--+'
-    res += separator + '\n'
-    res += tavnit % tuple(columns) + '\n'
-    res += separator + '\n'
-    for row in rows:
-        res += tavnit % row + '\n'
-    res += separator
-    return res
+def _read_tables(filename='data/tables.txt'):
+    """Reads the list of databases from the given database file,
+    defaulting to "data/tables.txt" for the main bot instance."""
+    mode = 'r' if os.path.isfile(filename) else 'w'
+    with open(filename, mode) as f:
+        if mode == 'w':
+            f.write('')
+        return f.read().splitlines()
+
+
+_tables = _read_tables()
+
+
+def _save_tables(filename='data/tables.txt'):
+    """Saves the list of databases to the given database file,
+    defaulting to "data/tables.txt" for the main bot instance."""
+    with open(filename, 'w') as f:
+        f.write("\n".join(_tables))
+
+
+async def getdatabase(db_name, cb):
+    """Fetches the `db_name` Redis database. It will be created
+    if it hasn't been initialised OR if it doesn't yet exist in
+    the bot's tables file (default is data/tables.txt).
+    """
+    global _databases
+    global _tables
+
+    if db_name in _databases:
+        return _databases[db_name]
+
+    # The database may exist, but it hasn't been initialised
+    # yet.
+    # So, we find the index of the database. If the database
+    # doesn't exist in _tables, then it's entirely new.
+    try:
+        _tables.index(db_name)
+    except ValueError:
+        _tables.append(db_name)
+        _save_tables()
+    finally:
+        db_idx = _tables.index(db_name)
+
+    db = await aioredis.create_redis(cb.redis_url, db=db_idx, loop=cb.loop)
+    _databases[db_name] = db
+    return db
